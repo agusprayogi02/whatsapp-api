@@ -37,6 +37,8 @@
  * └──────────────────────────────────────────────────────────────────────────────┘
  */
 
+import { Boom } from '@hapi/boom';
+import PrismType, { Instance, Webhook } from '@prisma/client';
 import makeWASocket, {
   BaileysEventMap,
   BufferedEventData,
@@ -68,27 +70,67 @@ import makeWASocket, {
   WASocket,
   WAVersion,
 } from '@whiskeysockets/baileys';
+import axios, { AxiosError } from 'axios';
+import { isArray, isBase64, isNotEmpty, isURL } from 'class-validator';
+import EventEmitter2 from 'eventemitter2';
+import ffmpeg from 'fluent-ffmpeg';
+import {
+  accessSync,
+  constants,
+  existsSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from 'fs';
+import Long from 'long';
+import mime from 'mime-types';
+import NodeCache from 'node-cache';
+import { release } from 'os';
+import { join, normalize } from 'path';
+import P from 'pino';
+import qrcode, { QRCodeToDataURLOptions } from 'qrcode';
+import qrcodeTerminal from 'qrcode-terminal';
+import sharp from 'sharp';
+import { PassThrough } from 'stream';
+import { ulid } from 'ulid';
 import {
   ConfigService,
   ConfigSessionPhone,
   Database,
   GlobalWebhook,
-  QrCode,
   ProviderSession,
+  QrCode,
 } from '../../config/env.config';
 import { Logger } from '../../config/logger.config';
 import { INSTANCE_DIR, ROOT_DIR } from '../../config/path.config';
-import { join, normalize } from 'path';
-import axios, { AxiosError } from 'axios';
-import qrcode, { QRCodeToDataURLOptions } from 'qrcode';
-import qrcodeTerminal from 'qrcode-terminal';
-import { Boom } from '@hapi/boom';
-import EventEmitter2 from 'eventemitter2';
-import { release } from 'os';
-import P from 'pino';
+import { BadRequestException, InternalServerErrorException } from '../../exceptions';
+import * as s3Service from '../../integrations/minio/minio.utils';
+import { ProviderFiles } from '../../provider/sessions';
+import { Query, Repository } from '../../repository/repository.service';
+import {
+  AuthState,
+  AuthStateProvider,
+} from '../../utils/use-multi-file-auth-state-provider-files';
+import { isValidUlid } from '../../validate/ulid';
+import { Websocket } from '../../websocket/server';
+import {
+  ArchiveChatDto,
+  DeleteMessage,
+  OnWhatsAppDto,
+  ReadMessageDto,
+  ReadMessageIdDto,
+  RejectCallDto,
+  UpdatePresenceDto,
+  WhatsAppNumberDto,
+} from '../dto/chat.dto';
+import {
+  CreateGroupDto,
+  GroupJid,
+  GroupPictureDto,
+  GroupUpdateParticipantDto,
+} from '../dto/group.dto';
 import {
   AudioMessageFileDto,
-  Button,
   ContactMessage,
   MediaFileDto,
   MediaMessage,
@@ -104,51 +146,7 @@ import {
   SendReactionDto,
   SendTextDto,
 } from '../dto/sendMessage.dto';
-import { isArray, isBase64, isNotEmpty, isURL } from 'class-validator';
-import {
-  ArchiveChatDto,
-  DeleteMessage,
-  OnWhatsAppDto,
-  ReadMessageDto,
-  ReadMessageIdDto,
-  RejectCallDto,
-  UpdatePresenceDto,
-  WhatsAppNumberDto,
-} from '../dto/chat.dto';
-import { BadRequestException, InternalServerErrorException } from '../../exceptions';
-import {
-  CreateGroupDto,
-  GroupJid,
-  GroupPictureDto,
-  GroupUpdateParticipantDto,
-} from '../dto/group.dto';
-import Long from 'long';
-import NodeCache, { Data } from 'node-cache';
-import {
-  AuthState,
-  AuthStateProvider,
-} from '../../utils/use-multi-file-auth-state-provider-files';
-import mime from 'mime-types';
-import { Instance, Webhook } from '@prisma/client';
 import { WebhookEvents, WebhookEventsEnum, WebhookEventsType } from '../dto/webhook.dto';
-import { Query, Repository } from '../../repository/repository.service';
-import PrismType from '@prisma/client';
-import * as s3Service from '../../integrations/minio/minio.utils';
-import { ProviderFiles } from '../../provider/sessions';
-import { Websocket } from '../../websocket/server';
-import { ulid } from 'ulid';
-import { isValidUlid } from '../../validate/ulid';
-import sharp from 'sharp';
-import ffmpeg from 'fluent-ffmpeg';
-import { PassThrough, Stream } from 'stream';
-import {
-  accessSync,
-  constants,
-  existsSync,
-  readFileSync,
-  unlinkSync,
-  writeFileSync,
-} from 'fs';
 
 type InstanceQrCode = {
   count: number;

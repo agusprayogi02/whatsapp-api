@@ -28,3 +28,4 @@ lerna-debug.log*
 /test/
 .env
 /uploads
+/credentials-minio.json

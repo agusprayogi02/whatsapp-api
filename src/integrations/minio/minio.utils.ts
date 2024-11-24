@@ -37,8 +37,8 @@
 import * as MinIo from 'minio';
 import { join } from 'path';
 import { Readable, Transform } from 'stream';
-import { BadRequestException } from '../../exceptions';
 import { Bucket, ConfigService } from '../../config/env.config';
+import { BadRequestException } from '../../exceptions';
 
 const BUCKET = new ConfigService().get<Bucket>('S3');
 
@@ -99,7 +99,8 @@ const uploadFile = async (
   metadata: Metadata,
 ) => {
   if (minioClient) {
-    const objectName = join('codechat_v1', fileName);
+    let objectName = join('codechat_v1', fileName);
+    objectName = objectName.replace(/\\/g, '/');
     try {
       metadata['custom-header-application'] = 'codechat-api-v1';
       const o = await minioClient.putObject(bucketName, objectName, file, size, metadata);
@@ -114,7 +115,7 @@ const uploadFile = async (
           contentType: metadata['Content-Type'],
           fromMe: metadata['custom-header-fromMe'],
         },
-        { versionId: '_1""' },
+        { versionId: o.versionId },
       );
       return o;
     } catch (error) {
@@ -138,4 +139,4 @@ const getObjectUrl = async (fileName: string, expiry?: number) => {
   }
 };
 
-export { uploadFile, getObjectUrl, BUCKET };
+export { BUCKET, getObjectUrl, uploadFile };

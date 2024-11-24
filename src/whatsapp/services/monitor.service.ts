@@ -37,22 +37,22 @@
  * └──────────────────────────────────────────────────────────────────────────────┘
  */
 
-import { opendirSync, readdirSync, rmSync } from 'fs';
-import { WAStartupService } from './whatsapp.service';
-import { INSTANCE_DIR } from '../../config/path.config';
+import { Instance } from '@prisma/client';
 import EventEmitter2 from 'eventemitter2';
+import { existsSync, mkdirSync, opendirSync, readdirSync, rmSync } from 'fs';
 import { join } from 'path';
-import { Logger } from '../../config/logger.config';
 import {
   ConfigService,
   Database,
   InstanceExpirationTime,
   ProviderSession,
 } from '../../config/env.config';
-import { Repository } from '../../repository/repository.service';
-import { Instance } from '@prisma/client';
+import { Logger } from '../../config/logger.config';
+import { INSTANCE_DIR } from '../../config/path.config';
 import { ProviderFiles } from '../../provider/sessions';
+import { Repository } from '../../repository/repository.service';
 import { Websocket } from '../../websocket/server';
+import { WAStartupService } from './whatsapp.service';
 
 export class WAMonitoringService {
   constructor(
@@ -167,6 +167,11 @@ export class WAMonitoringService {
         });
 
         return;
+      }
+
+      if (!existsSync(INSTANCE_DIR)) {
+        console.error('Directory does not exist:', INSTANCE_DIR);
+        mkdirSync(INSTANCE_DIR, { recursive: true });
       }
 
       const dir = opendirSync(INSTANCE_DIR, { encoding: 'utf-8' });
