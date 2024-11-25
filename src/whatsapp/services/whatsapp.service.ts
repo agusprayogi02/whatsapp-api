@@ -1469,12 +1469,12 @@ export class WAStartupService {
 
         writeFileSync(fileName, Buffer.from(response.data));
 
-        if (mediaMessage.mediatype === 'image') {
+        if (mediaMessage.mediaType === 'image') {
           preview = response.data;
         }
       }
 
-      if (mediaMessage.mediatype === 'video') {
+      if (mediaMessage.mediaType === 'video') {
         try {
           preview = await this.generateVideoThumbnailFromStream(fileName);
         } catch (error) {
@@ -1499,13 +1499,13 @@ export class WAStartupService {
       }
 
       const prepareMedia = await prepareWAMessageMedia(
-        { [mediaMessage.mediatype]: media } as any,
+        { [mediaMessage.mediaType]: media } as any,
         { upload: this.client.waUploadToServer },
       );
 
-      const mediaType = mediaMessage.mediatype + 'Message';
+      const mediaType = mediaMessage.mediaType + 'Message';
 
-      if (mediaMessage.mediatype === 'document' && !mediaMessage.fileName) {
+      if (mediaMessage.mediaType === 'document' && !mediaMessage.fileName) {
         const regex = new RegExp(/.*\/(.+?)\./);
         const arrayMatch = regex.exec(mediaMessage.media as string);
         mediaMessage.fileName = arrayMatch[1];
@@ -1523,12 +1523,12 @@ export class WAStartupService {
         prepareMedia.audioMessage.ptt = true;
       }
 
-      if (mediaMessage.mediatype === 'video') {
+      if (mediaMessage.mediaType === 'video') {
         prepareMedia[mediaType].jpegThumbnail = preview;
         prepareMedia[mediaType].gifPlayback = false;
       }
 
-      if (mediaMessage.mediatype === 'image') {
+      if (mediaMessage.mediaType === 'image') {
         const p = await sharp(preview || media)
           .resize(320, 240, { fit: 'contain' })
           .toFormat('jpeg', { quality: 80 })
@@ -1578,7 +1578,7 @@ export class WAStartupService {
     const generate = await this.prepareMediaMessage({
       fileName: fileName,
       media: fileName,
-      mediatype: data.mediatype,
+      mediaType: data.mediaType,
       caption: data?.caption,
       extension: ext,
     });
@@ -1597,7 +1597,7 @@ export class WAStartupService {
     const generate = await this.prepareMediaMessage({
       media: data.audioMessage.audio,
       mimetype: 'audio/aac',
-      mediatype: 'audio',
+      mediaType: 'audio',
       convert: data?.options?.convertAudio,
     });
 
@@ -1613,7 +1613,7 @@ export class WAStartupService {
     const generate = await this.prepareMediaMessage({
       fileName: fileName,
       media: fileName,
-      mediatype: 'audio',
+      mediaType: 'audio',
       mimetype: 'audio/aac',
       convert: data?.convertAudio as boolean,
       extension: ext,
@@ -1694,7 +1694,7 @@ export class WAStartupService {
     const generate = await (async () => {
       if (data.buttonsMessage?.thumbnailUrl) {
         return await this.prepareMediaMessage({
-          mediatype: 'image',
+          mediaType: 'image',
           media: data.buttonsMessage.thumbnailUrl,
         });
       }
@@ -1754,7 +1754,7 @@ export class WAStartupService {
     const generate = await (async () => {
       if (data.listMessage?.thumbnailUrl) {
         return await this.prepareMediaMessage({
-          mediatype: 'image',
+          mediaType: 'image',
           media: data.listMessage.thumbnailUrl,
         });
       }

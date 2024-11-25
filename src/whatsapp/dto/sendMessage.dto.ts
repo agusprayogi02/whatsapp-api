@@ -66,7 +66,7 @@ export class SendTextDto extends Metadata {
 
 export type MediaType = 'image' | 'document' | 'video' | 'audio';
 export class MediaMessage {
-  mediatype: MediaType;
+  mediaType: MediaType;
   caption?: string;
   // for document
   fileName?: string;
@@ -79,7 +79,7 @@ export class SendMediaDto extends Metadata {
 
 export class MediaFileDto extends Metadata {
   caption?: string;
-  mediatype: MediaType;
+  mediaType: MediaType;
   presence?: WAPresence;
   delay: number;
 }

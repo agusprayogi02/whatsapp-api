@@ -64,7 +64,7 @@ export class SendMessageController {
     if (isBase64(data?.mediaMessage?.media)) {
       throw new BadRequestException('Owned media must be a url');
     }
-    if (data.mediaMessage.mediatype === 'document' && !data.mediaMessage?.fileName) {
+    if (data.mediaMessage.mediaType === 'document' && !data.mediaMessage?.fileName) {
       throw new BadRequestException(
         'The "fileName" property must be provided for documents',
       );

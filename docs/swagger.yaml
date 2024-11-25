@@ -700,7 +700,7 @@ paths:
           - `presence` (optional): The presence status to set while sending the message. Can be one of 'composing', 'recording', or 'paused'.
           - `quotedMessageId` (optional): The ID of the message to quote.
         - `mediaMessage` (required): The media message details.
-          - `mediatype` (required): The type of media to send. Can be one of 'image', 'document', 'video', or 'audio'.
+          - `mediaType` (required): The type of media to send. Can be one of 'image', 'document', 'video', or 'audio'.
           - `fileName` (optional): The name of the file.
           - `caption` (optional): The caption for the media.
           - `media` (required): The URL of the media file.
