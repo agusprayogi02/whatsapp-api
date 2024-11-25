@@ -1,10 +1,10 @@
 module.exports = {
   apps: [
     {
-      name: "whatsapp-api",  // Application name
-      script: "./dist/src/main.js",       // Path to your entry file
-      instances: "max",         // Run as many instances as CPU cores
-      exec_mode: "cluster",     // Enable cluster mode
-    }
-  ]
-}
+      name: 'whatsapp-api', // Application name
+      script: './dist/src/main.js', // Path to your entry file
+      instances: 'max', // Run as many instances as CPU cores
+      exec_mode: 'fork', // Enable cluster mode
+    },
+  ],
+};
