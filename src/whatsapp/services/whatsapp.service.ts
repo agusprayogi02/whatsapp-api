@@ -40,6 +40,7 @@
 import { Boom } from '@hapi/boom';
 import PrismType, { Instance, Webhook } from '@prisma/client';
 import makeWASocket, {
+  AnyMessageContent,
   BaileysEventMap,
   BufferedEventData,
   CacheStore,
@@ -573,6 +574,8 @@ export class WAStartupService {
     'chats.upsert': async (chats: Chat[]) => {
       chats.forEach(async (chat) => {
         try {
+          const item = { ...chat };
+          delete item.id;
           const list: PrismType.Chat[] = [];
           const find = await this.repository.chat.findFirst({
             where: {
@@ -584,12 +587,22 @@ export class WAStartupService {
             const create = await this.repository.chat.create({
               data: {
                 remoteJid: chat.id,
+                content: item as any,
                 instanceId: this.instance.id,
               },
             });
             list.push(create);
           } else {
-            list.push(find);
+            const update = await this.repository.chat.update({
+              where: {
+                id: find.id,
+              },
+              data: {
+                content: item as any,
+                updatedAt: new Date(),
+              },
+            });
+            list.push(update);
           }
           this.ws.send(this.instance.name, 'chats.upsert', list);
 
@@ -610,10 +623,39 @@ export class WAStartupService {
       >[],
     ) => {
       const chatsRaw: PrismType.Chat[] = chats.map((chat) => {
-        return { remoteJid: chat.id, instanceId: this.instance.id } as PrismType.Chat;
+        const item = { ...chat };
+        delete item.id;
+        return {
+          remoteJid: chat.id,
+          instanceId: this.instance.id,
+          content: item,
+        } as PrismType.Chat;
       });
       this.ws.send(this.instance.name, 'chats.update', chatsRaw);
       await this.sendDataWebhook('chatsUpdated', chatsRaw);
+      chatsRaw.forEach((chat) => {
+        this.repository.chat
+          .findFirst({
+            where: {
+              instanceId: this.instance.id,
+              remoteJid: chat.remoteJid,
+            },
+          })
+          .then((result) =>
+            this.repository.chat
+              .update({
+                where: {
+                  id: result.id,
+                },
+                data: {
+                  content: chat.content,
+                  updatedAt: new Date(),
+                },
+              })
+              .catch((err) => this.logger.error(err)),
+          )
+          .catch((err) => this.logger.error(err));
+      });
     },
 
     'chats.delete': async (chats: string[]) => {
@@ -787,7 +829,7 @@ export class WAStartupService {
     }) => {
       for (const received of messages) {
         if (!received?.message) {
-          return;
+          continue;
         }
 
         this.client.sendPresenceUpdate('unavailable');
@@ -1234,27 +1276,36 @@ export class WAStartupService {
           };
         }
 
+        let m: proto.IWebMessageInfo;
+
         const messageId = options?.messageId || ulid(Date.now());
 
-        const m = generateWAMessageFromContent(recipient, message, {
-          timestamp: new Date(),
-          userJid: this.instance.ownerJid,
-          messageId,
-          quoted: q,
-        });
+        if (message?.['react']) {
+          m = await this.client.sendMessage(recipient, message as AnyMessageContent, {
+            quoted: q,
+            messageId,
+          });
+        } else {
+          m = generateWAMessageFromContent(recipient, message, {
+            timestamp: new Date(),
+            userJid: this.instance.ownerJid,
+            messageId,
+            quoted: q,
+          });
 
-        const id = await this.client.relayMessage(recipient, m.message, { messageId });
+          const id = await this.client.relayMessage(recipient, m.message, { messageId });
 
-        m.key = {
-          id: id,
-          remoteJid: jid,
-          participant: isJidUser(jid) ? jid : undefined,
-          fromMe: true,
-        };
+          m.key = {
+            id: id,
+            remoteJid: jid,
+            participant: isJidUser(jid) ? jid : undefined,
+            fromMe: true,
+          };
 
-        for (const [key, value] of Object.entries(m)) {
-          if (!value || (isArray(value) && value.length) === 0) {
-            delete m[key];
+          for (const [key, value] of Object.entries(m)) {
+            if (!value || (isArray(value) && value.length) === 0) {
+              delete m[key];
+            }
           }
         }
 
@@ -1682,12 +1733,15 @@ export class WAStartupService {
   }
 
   public async reactionMessage(data: SendReactionDto) {
-    return await this.sendMessageWithTyping(data.reactionMessage.key.remoteJid, {
-      reactionMessage: {
-        key: data.reactionMessage.key,
-        text: data.reactionMessage.reaction,
+    return await this.sendMessageWithTyping<AnyMessageContent>(
+      data.reactionMessage.key.remoteJid,
+      {
+        react: {
+          key: data.reactionMessage.key,
+          text: data.reactionMessage.reaction,
+        },
       },
-    });
+    );
   }
 
   public async buttonsMessage(data: SendButtonsDto) {
@@ -1871,7 +1925,7 @@ export class WAStartupService {
       } else {
         try {
           const result = (await this.client.onWhatsApp(jid))[0];
-          onWhatsapp.push(new OnWhatsAppDto(result.jid, result.exists));
+          onWhatsapp.push(new OnWhatsAppDto(result.jid, !!result.exists));
         } catch (error) {
           onWhatsapp.push(new OnWhatsAppDto(number, false));
         }
@@ -2063,6 +2117,11 @@ export class WAStartupService {
           }
         : ((await this.getMessage(m, true)) as proto.IWebMessageInfo);
 
+      if (msg?.message?.documentWithCaptionMessage) {
+        msg.message.documentMessage =
+          msg.message.documentWithCaptionMessage?.message?.documentMessage;
+      }
+
       for (const subtype of MessageSubtype) {
         if (msg?.message?.[subtype]) {
           msg.message = msg.message[subtype].message;
@@ -2164,16 +2223,26 @@ export class WAStartupService {
   }
 
   public async fetchMessages(query: Query<PrismType.Message>) {
+    const where = {
+      instanceId: this.instance.id,
+      id: query?.where?.id,
+      keyId: query?.where?.keyId,
+      keyFromMe: query?.where?.keyFromMe,
+      keyRemoteJid: query.where?.keyRemoteJid,
+      device: query?.where?.device,
+      messageType: query?.where?.messageType,
+    };
+
+    if (query?.where?.['messageStatus']) {
+      where['MessageUpdate'] = {
+        some: {
+          status: query.where['messageStatus'],
+        },
+      };
+    }
+
     const count = await this.repository.message.count({
-      where: {
-        instanceId: this.instance.id,
-        id: query?.where?.id,
-        keyId: query?.where?.keyId,
-        keyFromMe: query?.where?.keyFromMe,
-        keyRemoteJid: query.where?.keyRemoteJid,
-        device: query?.where?.device,
-        messageType: query?.where?.messageType,
-      },
+      where,
     });
 
     if (!query?.offset) {
@@ -2185,15 +2254,7 @@ export class WAStartupService {
     }
 
     const messages = await this.repository.message.findMany({
-      where: {
-        instanceId: this.instance.id,
-        id: query?.where?.id,
-        keyId: query?.where?.keyId,
-        keyFromMe: query?.where?.keyFromMe,
-        keyRemoteJid: query.where?.keyRemoteJid,
-        device: query?.where?.device,
-        messageType: query?.where?.messageType,
-      },
+      where,
       orderBy: {
         messageTimestamp: 'desc',
       },
