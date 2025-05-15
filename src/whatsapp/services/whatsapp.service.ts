@@ -72,7 +72,7 @@ import makeWASocket, {
   WAVersion,
 } from '@whiskeysockets/baileys';
 import axios, { AxiosError } from 'axios';
-import { isArray, isBase64, isNotEmpty, isURL } from 'class-validator';
+import { isArray, isBase64, isInt, isNotEmpty, isURL } from 'class-validator';
 import EventEmitter2 from 'eventemitter2';
 import ffmpeg from 'fluent-ffmpeg';
 import {
@@ -642,19 +642,21 @@ export class WAStartupService {
               remoteJid: chat.remoteJid,
             },
           })
-          .then((result) =>
-            this.repository.chat
-              .update({
-                where: {
-                  id: result.id,
-                },
-                data: {
-                  content: chat.content,
-                  updatedAt: new Date(),
-                },
-              })
-              .catch((err) => this.logger.error(err)),
-          )
+          .then((result) => {
+            if (result) {
+              this.repository.chat
+                .update({
+                  where: {
+                    id: result.id,
+                  },
+                  data: {
+                    content: chat.content,
+                    updatedAt: new Date(),
+                  },
+                })
+                .catch((err) => this.logger.error(err));
+            }
+          })
           .catch((err) => this.logger.error(err));
       });
     },
